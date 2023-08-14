@@ -3,6 +3,14 @@ import torch.nn.functional as F
 from torch import nn
 
 
+
+def device_as(t1, t2):
+   """
+   Moves tensor t1 to the device of tensor t2.
+   """
+   return t1.to(t2.device)
+
+
 class ContrastiveLoss(nn.Module):
     """
     ContrastiveLoss calculates the loss in the SimCLR method, emphasizing learning by comparing pair similarities.
@@ -21,7 +29,7 @@ class ContrastiveLoss(nn.Module):
             batch_size: int,
             temperature: float=0.5
     ):
-        super().__init__()
+        super(ContrastiveLoss, self).__init__()
         # Initializing loss hyperparameters
         self.batch_size = batch_size
         self.temperature = temperature
@@ -50,6 +58,7 @@ class ContrastiveLoss(nn.Module):
         Returns:
             torch.Tensor: Calculated contrastive loss.
         """
+        batch_size = z_i.shape[0]
         # performing l_2 normalization 
         z_i = F.normalize(z_i, p=2)
         z_j = F.normalize(z_j, p=2)
@@ -59,17 +68,17 @@ class ContrastiveLoss(nn.Module):
         # extracting only positive pairs to calculate the numerator
         positives = torch.cat(
             [
-                torch.diag(similarity_matrix, self.batch_size),
-                torch.diag(similarity_matrix, -self.batch_size)
+                torch.diag(similarity_matrix, batch_size),
+                torch.diag(similarity_matrix, -batch_size)
             ],
         )
 
         nominator = torch.exp(positives / self.temperature)
 
         # getting all (positive and negative) pairs to calculate the denominator
-        mask = (~torch.eye(2 * self.batch_size, dtype=bool)).float()
+        mask = (~torch.eye(2 * batch_size, dtype=bool)).float()
         denominator = torch.sum(
-            mask * torch.exp(similarity_matrix / self.temperature),
+            device_as(mask, similarity_matrix) * torch.exp(similarity_matrix / self.temperature),
             dim=1
         )
 
